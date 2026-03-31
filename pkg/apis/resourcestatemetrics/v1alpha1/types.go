@@ -209,14 +209,18 @@ type Store struct {
 	Group string `json:"group"`
 
 	// Version is the API version of the resource. Supports "*" to match all versions.
+	// +kubebuilder:validation:MinLength=1
 	Version string `json:"version"`
 
 	// Kind is the kind of the resource.
 	// Supports "*" to match all kinds within the specified group/version.
+	// +kubebuilder:validation:MinLength=1
 	Kind string `json:"kind"`
 
 	// Resource is the plural resource name (e.g. "deployments", "pods").
-	Resource string `json:"resource"`
+	// If omitted, the controller will resolve it from the Kind via API discovery.
+	// +optional
+	Resource string `json:"resource,omitempty"`
 
 	// Selectors defines how to filter the resources to watch.
 	// +optional
