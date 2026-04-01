@@ -17,6 +17,7 @@ limitations under the License.
 package internal
 
 import (
+	"fmt"
 	"path/filepath"
 	"strings"
 
@@ -33,6 +34,10 @@ const WildcardPattern = "*"
 type ResourceDiscovery interface {
 	// ExpandWildcards expands a store with wildcard GVK patterns into concrete stores.
 	ExpandWildcards(store *v1alpha1.Store) ([]v1alpha1.Store, error)
+
+	// ResolveResource resolves the plural resource name for a given concrete GVK
+	// by querying the API server's discovery endpoint.
+	ResolveResource(group, version, kind string) (string, error)
 }
 
 // discoveryClient implements ResourceDiscovery using the Kubernetes discovery API.
@@ -132,6 +137,42 @@ func (d *discoveryClient) ExpandWildcards(store *v1alpha1.Store) ([]v1alpha1.Sto
 	}
 
 	return expandedStores, nil
+}
+
+// ResolveResource resolves the plural resource name for a concrete group/version/kind
+// by querying the API server's discovery endpoint.
+func (d *discoveryClient) ResolveResource(group, version, kind string) (string, error) {
+	_, apiResourceLists, err := d.client.ServerGroupsAndResources()
+	if err != nil && apiResourceLists == nil {
+		return "", fmt.Errorf("discovery failed: %w", err)
+	}
+
+	for _, apiResourceList := range apiResourceLists {
+		groupVersion, parseErr := schema.ParseGroupVersion(apiResourceList.GroupVersion)
+		if parseErr != nil {
+			continue
+		}
+
+		if groupVersion.Group != group || groupVersion.Version != version {
+			continue
+		}
+
+		for _, apiResource := range apiResourceList.APIResources {
+			if strings.Contains(apiResource.Name, "/") {
+				continue
+			}
+
+			if apiResource.Kind == kind {
+				d.logger.V(2).Info("Resolved resource name",
+					"group", group, "version", version,
+					"kind", kind, "resource", apiResource.Name)
+
+				return apiResource.Name, nil
+			}
+		}
+	}
+
+	return "", fmt.Errorf("no resource found for %s/%s/%s", group, version, kind)
 }
 
 // matchesPattern checks if a value matches a glob-style pattern.

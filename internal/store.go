@@ -204,7 +204,7 @@ func (s *StoreType) generateMetricsForObject(obj *unstructured.Unstructured) met
 		inheritFamilyConfiguration(family, s)
 
 		family.logger = s.logger
-		metricStr, sampleCount := family.buildMetricString(obj)
+		metricStr, sampleCount := family.buildMetricString(obj, s.Labels)
 		result.metrics[i] = metricStr
 		result.perFamily[family.Name] = sampleCount
 
@@ -218,8 +218,6 @@ func inheritFamilyConfiguration(f *FamilyType, s *StoreType) {
 	if f.Resolver == v1alpha1.ResolverTypeNone {
 		f.Resolver = s.Resolver
 	}
-
-	f.Labels = append(f.Labels, s.Labels...)
 }
 
 // checkAndApplyThresholds checks cardinality thresholds and applies cutoffs to families.

@@ -147,7 +147,7 @@ func generatePeripheralMetric(familyRawBuilder *strings.Builder, familyName stri
 
 // buildMetricString returns the given family in its byte representation and the sample count.
 // If the family is cut off due to cardinality limits, it returns an empty string and 0.
-func (f *FamilyType) buildMetricString(unstructured *unstructured.Unstructured) (string, int64) {
+func (f *FamilyType) buildMetricString(unstructured *unstructured.Unstructured, storeLabels []v1alpha1.Label) (string, int64) {
 	logger := f.logger.WithValues("family", f.Name)
 
 	if f.IsCutoff() {
@@ -170,8 +170,8 @@ func (f *FamilyType) buildMetricString(unstructured *unstructured.Unstructured) 
 		metric := &f.Metrics[i]
 		metricRawBuilder := getBuilder()
 
-		// Combine metric labels with family labels
-		metricLabels := inheritMetricLabels(f, metric)
+		// Combine metric labels with family and store labels
+		metricLabels := inheritMetricLabels(f, metric, storeLabels)
 
 		resolverInstance, err := f.resolver(metric.Resolver)
 		if err != nil {
@@ -266,9 +266,15 @@ func (f *FamilyType) buildMetricStringFromStarlark(unstr *unstructured.Unstructu
 	return familyRawBuilder.String(), sampleCount
 }
 
-// inheritMetricAttributes applies family-level labels to the metric.
-func inheritMetricLabels(f *FamilyType, metric *v1alpha1.Metric) []v1alpha1.Label {
-	return append(metric.Labels, f.Labels...)
+// inheritMetricLabels combines metric-level, family-level, and store-level labels.
+// It returns a new slice without mutating any of the inputs.
+func inheritMetricLabels(f *FamilyType, metric *v1alpha1.Metric, storeLabels []v1alpha1.Label) []v1alpha1.Label {
+	combined := make([]v1alpha1.Label, 0, len(metric.Labels)+len(f.Labels)+len(storeLabels))
+	combined = append(combined, metric.Labels...)
+	combined = append(combined, f.Labels...)
+	combined = append(combined, storeLabels...)
+
+	return combined
 }
 
 // resolveMetricValue resolves the value expression for a single metric. If the

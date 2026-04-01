@@ -229,6 +229,7 @@ spec:
                           description: |-
                             Kind is the kind of the resource.
                             Supports "*" to match all kinds within the specified group/version.
+                          minLength: 1
                           type: string
                         labels:
                           description: Labels defines additional labels to apply to
@@ -263,8 +264,9 @@ spec:
                           - ""
                           type: string
                         resource:
-                          description: Resource is the plural resource name (e.g.
-                            "deployments", "pods").
+                          description: |-
+                            Resource is the plural resource name (e.g. "deployments", "pods").
+                            If omitted, the controller will resolve it from the Kind via API discovery.
                           type: string
                         selectors:
                           description: Selectors defines how to filter the resources
@@ -282,6 +284,7 @@ spec:
                         version:
                           description: Version is the API version of the resource.
                             Supports "*" to match all versions.
+                          minLength: 1
                           type: string
                       required:
                       - families

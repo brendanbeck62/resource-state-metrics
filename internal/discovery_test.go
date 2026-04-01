@@ -315,3 +315,124 @@ func TestStoreKey(t *testing.T) {
 		t.Errorf("storeKey() = %q, want %q", key, expected)
 	}
 }
+
+func TestResolveResource(t *testing.T) {
+	t.Parallel()
+
+	logger := klog.Background()
+
+	fakeClient := fakeclientset.NewClientset()
+
+	fakeDiscovery, ok := fakeClient.Discovery().(*fake.FakeDiscovery)
+	if !ok {
+		t.Fatal("failed to cast discovery client")
+	}
+
+	fakeDiscovery.Resources = []*metav1.APIResourceList{
+		{
+			GroupVersion: "apps/v1",
+			APIResources: []metav1.APIResource{
+				{Name: "deployments", Kind: "Deployment", Namespaced: true},
+				{Name: "replicasets", Kind: "ReplicaSet", Namespaced: true},
+				{Name: "deployments/status", Kind: "Deployment", Namespaced: true},
+			},
+		},
+		{
+			GroupVersion: "v1",
+			APIResources: []metav1.APIResource{
+				{Name: "pods", Kind: "Pod", Namespaced: true},
+				{Name: "services", Kind: "Service", Namespaced: true},
+			},
+		},
+		{
+			GroupVersion: "vapor.platform.nike.com/v1alpha1",
+			APIResources: []metav1.APIResource{
+				{Name: "xnikestaticwebsites", Kind: "XNikeStaticWebsite", Namespaced: true},
+			},
+		},
+	}
+
+	discovery := NewResourceDiscovery(fakeDiscovery, logger)
+
+	tests := []struct {
+		name             string
+		group            string
+		version          string
+		kind             string
+		expectedResource string
+		expectError      bool
+	}{
+		{
+			name:             "resolves Deployment",
+			group:            "apps",
+			version:          "v1",
+			kind:             "Deployment",
+			expectedResource: "deployments",
+		},
+		{
+			name:             "resolves core API Pod",
+			group:            "",
+			version:          "v1",
+			kind:             "Pod",
+			expectedResource: "pods",
+		},
+		{
+			name:             "resolves custom resource",
+			group:            "vapor.platform.nike.com",
+			version:          "v1alpha1",
+			kind:             "XNikeStaticWebsite",
+			expectedResource: "xnikestaticwebsites",
+		},
+		{
+			name:             "skips subresources",
+			group:            "apps",
+			version:          "v1",
+			kind:             "Deployment",
+			expectedResource: "deployments",
+		},
+		{
+			name:        "error on unknown kind",
+			group:       "apps",
+			version:     "v1",
+			kind:        "NonExistent",
+			expectError: true,
+		},
+		{
+			name:        "error on wrong group",
+			group:       "extensions",
+			version:     "v1",
+			kind:        "Deployment",
+			expectError: true,
+		},
+		{
+			name:        "error on wrong version",
+			group:       "apps",
+			version:     "v1beta1",
+			kind:        "Deployment",
+			expectError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			resource, err := discovery.ResolveResource(tt.group, tt.version, tt.kind)
+			if tt.expectError {
+				if err == nil {
+					t.Errorf("ResolveResource() expected error, got resource=%q", resource)
+				}
+
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("ResolveResource() unexpected error: %v", err)
+			}
+
+			if resource != tt.expectedResource {
+				t.Errorf("ResolveResource() = %q, want %q", resource, tt.expectedResource)
+			}
+		})
+	}
+}

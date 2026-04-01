@@ -117,6 +117,35 @@ func (c *configurer) build(ctx context.Context, stores *sync.Map) {
 		allExpandedStores = append(allExpandedStores, expandedStores...)
 	}
 
+	// Resolve empty resource names via API discovery
+	for i := range allExpandedStores {
+		if allExpandedStores[i].Resource == "" {
+			resource, err := c.resourceDiscovery.ResolveResource(
+				allExpandedStores[i].Group,
+				allExpandedStores[i].Version,
+				allExpandedStores[i].Kind,
+			)
+			if err != nil {
+				logger.Error(err, "Failed to resolve resource name, skipping store",
+					"group", allExpandedStores[i].Group,
+					"version", allExpandedStores[i].Version,
+					"kind", allExpandedStores[i].Kind)
+
+				// Mark as empty so we can skip it below
+				allExpandedStores[i].Kind = ""
+
+				continue
+			}
+
+			logger.V(2).Info("Resolved empty resource name via discovery",
+				"group", allExpandedStores[i].Group,
+				"version", allExpandedStores[i].Version,
+				"kind", allExpandedStores[i].Kind,
+				"resource", resource)
+			allExpandedStores[i].Resource = resource
+		}
+	}
+
 	// Second pass: detect and handle duplicates
 	seenStores := make(map[string]int)        // storeKey -> count
 	seenFamilies := make(map[string][]string) // familyName -> []storeKeys
@@ -127,6 +156,12 @@ func (c *configurer) build(ctx context.Context, stores *sync.Map) {
 
 	for i := range allExpandedStores {
 		store := &allExpandedStores[i]
+
+		// Skip stores that failed resource resolution
+		if store.Kind == "" {
+			continue
+		}
+
 		key := storeKey(store)
 
 		if count, exists := seenStores[key]; exists {
