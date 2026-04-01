@@ -166,6 +166,11 @@ func (s *mainServer) build(ctx context.Context, client kubernetes.Interface, _ p
 
 			// Generate metrics.
 			generator(writer)
+
+			// OpenMetrics requires every response to end with # EOF.
+			if contentType.FormatType() == expfmt.TypeOpenMetrics {
+				fmt.Fprint(writer, "# EOF\n")
+			}
 		}
 	}
 	mux.Handle("/metrics", promhttp.InstrumentHandlerDuration(s.requestsDurationVec, metricsHandler(func(w http.ResponseWriter) {
